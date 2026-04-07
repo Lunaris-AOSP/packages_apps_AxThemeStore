@@ -39,6 +39,19 @@ class ThemeRepository(private val context: Context) {
         private const val THEMES_JSON_URL = 
             "https://raw.githubusercontent.com/Lunaris-AOSP/AxThemeStore_themes_repository/16.2/themes.json"
         private const val CACHE_DURATION_MS = 0L
+
+        private val THEMEPICKER_CATEGORIES = setOf(
+            "android.theme.customization.font",
+            "android.theme.customization.adaptive_icon_shape",
+            "android.theme.customization.icon_pack.android",
+            "android.theme.customization.icon_pack.systemui",
+            "android.theme.customization.icon_pack.settings",
+            "android.theme.customization.icon_pack.launcher",
+            "android.theme.customization.icon_pack.themepicker",
+            "android.theme.customization.system_palette",
+            "android.theme.customization.accent_color",
+            "android.theme.customization.color_source",
+        )
     }
     
     private var cachedResponse: ThemesResponse? = null
@@ -191,7 +204,8 @@ class ThemeRepository(private val context: Context) {
             category = json.optString("category"),
             tags = tags,
             overlays = overlays,
-            isUnified = json.optBoolean("isUnified", false)
+            isUnified = json.optBoolean("isUnified", false),
+            supportsRegionSampling = json.optBoolean("supportsRegionSampling", false)
         )
     }
     
@@ -259,52 +273,83 @@ class ThemeRepository(private val context: Context) {
                 
                 if (packageInfo.applicationInfo?.enabled == false) continue
                 
-                val isThemePackage = isThemePackage(packageName, packageInfo.applicationInfo?.metaData)
-                
-                if (isThemePackage) {
+                val overlayCategory = packageInfo.overlayCategory
+                val isRroTheme = packageInfo.isOverlayPackage() &&
+                        overlayCategory != null &&
+                        overlayCategory.startsWith("android.theme.customization.") &&
+                        overlayCategory !in THEMEPICKER_CATEGORIES
+                val isAxionTheme = isThemePackage(packageInfo.applicationInfo?.metaData)
+
+                if (isRroTheme || isAxionTheme) {
                     val appInfo = packageInfo.applicationInfo
-                    val appLabel = appInfo?.let { 
-                        pm.getApplicationLabel(it).toString() 
+                    val appLabel = appInfo?.let {
+                        pm.getApplicationLabel(it).toString()
                     } ?: packageName
-                    
-                    val targets = getThemeTargets(packageInfo.applicationInfo?.metaData)
-                    
-                    val iconThemeTargets = setOf(
-                        "wifi", "signal", 
-                        "android", "systemui", "systemui_icons",
-                        "settings", "com.android.settings",
-                        "framework", "framework-res"
-                    )
-                    val isIconTheme = targets.isNotEmpty() && targets.all { target ->
-                         iconThemeTargets.any { it.equals(target, ignoreCase = true) }
+
+                    val theme = if (isRroTheme) {
+                        val componentId = overlayCategory!!.removePrefix("android.theme.customization.")
+                        val uiCategory = overlayCategory.removePrefix("android.theme.customization.")
+                        Theme(
+                            id = "local_$packageName",
+                            name = appLabel,
+                            description = "Locally installed theme overlay",
+                            author = "Third-party",
+                            version = packageInfo.versionName ?: "1.0",
+                            versionCode = packageInfo.longVersionCode.toInt(),
+                            minSdk = packageInfo.applicationInfo?.minSdkVersion ?: 31,
+                            previewImages = emptyList(),
+                            category = uiCategory,
+                            tags = listOf(uiCategory, "local"),
+                            overlays = listOf(
+                                ThemeOverlay(
+                                    componentId = componentId,
+                                    packageName = packageName,
+                                    targetPackage = packageInfo.overlayTarget ?: "",
+                                    targets = listOf(overlayCategory),
+                                    downloadUrl = "",
+                                    fileSize = 0,
+                                    enabled = true
+                                )
+                            ),
+                            isUnified = true
+                        )
+                    } else {
+                        val targets = getThemeTargets(packageInfo.applicationInfo?.metaData)
+                        val iconThemeTargets = setOf(
+                            "wifi", "signal",
+                            "android", "systemui", "systemui_icons",
+                            "settings", "com.android.settings",
+                            "framework", "framework-res"
+                        )
+                        val isIconTheme = targets.isNotEmpty() && targets.all { target ->
+                            iconThemeTargets.any { it.equals(target, ignoreCase = true) }
+                        }
+                        val category = if (isIconTheme) "icon_themes" else "local"
+                        Theme(
+                            id = "local_$packageName",
+                            name = appLabel,
+                            description = "Manually installed theme package",
+                            author = "Third-party",
+                            version = packageInfo.versionName ?: "1.0",
+                            versionCode = packageInfo.longVersionCode.toInt(),
+                            minSdk = packageInfo.applicationInfo?.minSdkVersion ?: 31,
+                            previewImages = emptyList(),
+                            category = category,
+                            tags = if (isIconTheme) listOf("icons", "local", "third-party") else listOf("local", "third-party"),
+                            overlays = listOf(
+                                ThemeOverlay(
+                                    componentId = "unified",
+                                    packageName = packageName,
+                                    targetPackage = "",
+                                    targets = targets,
+                                    downloadUrl = "",
+                                    fileSize = 0,
+                                    enabled = true
+                                )
+                            ),
+                            isUnified = true
+                        )
                     }
-                    
-                    val category = if (isIconTheme) "icon_themes" else "local"
-                    
-                    val theme = Theme(
-                        id = "local_$packageName",
-                        name = appLabel,
-                        description = "Manually installed theme package",
-                        author = "Third-party",
-                        version = packageInfo.versionName ?: "1.0",
-                        versionCode = packageInfo.longVersionCode.toInt(),
-                        minSdk = packageInfo.applicationInfo?.minSdkVersion ?: 31,
-                        previewImages = emptyList(),
-                        category = category,
-                        tags = if (isIconTheme) listOf("icons", "local", "third-party") else listOf("local", "third-party"),
-                        overlays = listOf(
-                            ThemeOverlay(
-                                componentId = "unified",
-                                packageName = packageName,
-                                targetPackage = "",
-                                targets = targets,
-                                downloadUrl = "",
-                                fileSize = 0,
-                                enabled = true
-                            )
-                        ),
-                        isUnified = true
-                    )
                     themes.add(theme)
                 }
             }
@@ -315,11 +360,8 @@ class ThemeRepository(private val context: Context) {
         return themes
     }
     
-    private fun isThemePackage(packageName: String, metaData: android.os.Bundle?): Boolean {
-        val hasAxionThemeMeta = metaData?.containsKey("axion_theme") == true
-        if (hasAxionThemeMeta) return true
-        
-        return false
+    private fun isThemePackage(metaData: android.os.Bundle?): Boolean {
+        return metaData?.containsKey("axion_theme") == true
     }
     
     private fun getThemeTargets(metaData: android.os.Bundle?): List<String> {

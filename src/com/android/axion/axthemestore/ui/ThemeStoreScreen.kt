@@ -56,6 +56,8 @@ import com.android.axion.axthemestore.data.model.ThemeCategory
 import com.android.axion.axthemestore.data.model.ThemeInstallState
 import com.android.axion.axthemestore.engine.ThemeEngineProxy
 import com.android.axion.axthemestore.ui.components.AsyncNetworkImage
+import com.android.axion.axthemestore.ui.components.BackGesturePreview
+import com.android.axion.axthemestore.ui.components.BatteryStylePreview
 import com.android.axion.axthemestore.ui.components.ThemeCard
 import com.android.axion.axthemestore.ui.components.ImagePlaceholder
 import com.android.axion.axthemestore.ui.components.ThemePackagePreview
@@ -451,10 +453,10 @@ private fun BrowseScreen(
                         theme.isLocal
                     }
                     
+                    val featuredThemes = remember(uiState.themes) { uiState.themes.shuffled().take(3) }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        val featuredThemes = uiState.themes.take(3)
                         if (featuredThemes.isNotEmpty()) {
                             item {
                                 FeaturedCarousel(
@@ -572,13 +574,16 @@ private fun ThemeListItem(
                     .size(56.dp)
                     .clip(MaterialTheme.shapes.small)
             ) {
-                val isInstalled = installState is ThemeInstallState.Installed || 
+                val isInstalled = installState is ThemeInstallState.Installed ||
                                   installState is ThemeInstallState.InstalledInactive
-                val packageName = theme.overlays.firstOrNull()?.packageName
-                
+                val packageName = theme.overlays.firstOrNull()?.packageName ?: ""
+                val category = theme.category.ifEmpty { theme.overlays.firstOrNull()?.componentId ?: "" }
+                val isBattery = packageName.contains("battery") || category.contains("battery")
+                val isBackGesture = packageName.contains("back_gesture") || category.contains("back_gesture")
+                val isChargingAnim = packageName.contains("charging_animation") || category.contains("charging_animation")
+
                 run {
-                    val previewResIds = getLocalPreviewResIds(
-                        LocalContext.current, packageName ?: "")
+                    val previewResIds = getLocalPreviewResIds(LocalContext.current, packageName)
                     if (previewResIds.isNotEmpty()) {
                         Box(
                             modifier = Modifier
@@ -594,7 +599,63 @@ private fun ThemeListItem(
                                     MaterialTheme.colorScheme.onSurface)
                             )
                         }
-                    } else if (isInstalled && packageName != null) {
+                    } else if (isBattery) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            MaterialTheme.colorScheme.surfaceContainer
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BatteryStylePreview(
+                                packageName = packageName,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else if (isBackGesture) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            MaterialTheme.colorScheme.surfaceContainer
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BackGesturePreview(modifier = Modifier.fillMaxSize())
+                        }
+                    } else if (isChargingAnim) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            MaterialTheme.colorScheme.surfaceContainer
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatteryChargingFull,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (isInstalled && packageName.isNotEmpty()) {
                         ThemePackagePreview(
                             packageName = packageName,
                             modifier = Modifier.fillMaxSize(),
@@ -831,7 +892,8 @@ private fun FeaturedThemeCard(
     onClick: () -> Unit
 ) {
     val containerColor = MaterialTheme.colorScheme.primaryContainer
-    val iconTint = if (containerColor.luminance() < 0.4f) Color.White else Color.Black
+    val scrimmedBg = lerp(containerColor, Color.Black, 0.6f)
+    val textColor = if (scrimmedBg.luminance() < 0.4f) Color.White else Color.Black
 
     Card(
         onClick = onClick,
@@ -842,7 +904,7 @@ private fun FeaturedThemeCard(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            FeaturedPreviewContent(theme = theme, iconTint = iconTint)
+            FeaturedPreviewContent(theme = theme, iconTint = textColor)
 
             Box(
                 modifier = Modifier
@@ -857,9 +919,6 @@ private fun FeaturedThemeCard(
                         )
                     )
             )
-
-            val scrimmedBg = lerp(containerColor, Color.Black, 0.6f)
-            val textColor = if (scrimmedBg.luminance() < 0.4f) Color.White else Color.Black
 
             Column(
                 modifier = Modifier

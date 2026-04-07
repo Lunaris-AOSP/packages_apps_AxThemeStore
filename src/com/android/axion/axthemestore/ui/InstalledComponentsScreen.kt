@@ -43,12 +43,10 @@ fun InstalledComponentsScreen(
 ) {
     val categoryThemes by viewModel.categoryThemesState.collectAsStateWithLifecycle()
     val iconTheme = remember { mutableStateOf<String?>(null) }
-    val uiStyle = remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val proxy = ThemeEngineProxy(viewModel.getApplication())
         iconTheme.value = proxy.getIconTheme()
-        uiStyle.value = proxy.getUiStyle()
     }
     
     Scaffold(
@@ -242,7 +240,10 @@ private fun getCategoryDisplayName(categoryId: String): String {
         "systemui" -> "System UI"
         "wifi" -> "WiFi Icons"
         "signal" -> "Signal Icons"
-        else -> categoryId.replaceFirstChar { it.uppercase() }
+        "back_gesture" -> "Back Gesture"
+        "charging_animation" -> "Charging Animation"
+        "battery_style" -> "Battery Style"
+        else -> categoryId.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 }
 
@@ -252,6 +253,9 @@ private fun getCategoryIcon(categoryId: String): ImageVector {
         "signal" -> Icons.Default.SignalCellularAlt
         "systemui" -> Icons.Default.SettingsApplications
         "android" -> Icons.Default.Android
+        "back_gesture" -> Icons.Default.SwipeLeft
+        "charging_animation" -> Icons.Default.Bolt
+        "battery_style" -> Icons.Default.BatteryFull
         else -> Icons.Default.Category
     }
 }

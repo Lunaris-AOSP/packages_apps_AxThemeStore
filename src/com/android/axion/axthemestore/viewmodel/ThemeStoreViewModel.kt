@@ -71,7 +71,6 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
     
     init {
         loadThemes()
-        loadUiStyle()
         loadIconPacks()
         loadThemedIconStyle()
         refreshComponentStates()
@@ -83,22 +82,6 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
         _categoryThemes.value = themeEngineProxy.getCategoryThemes()
     }
 
-    fun loadUiStyle() {
-        viewModelScope.launch {
-            val style = themeEngineProxy.getUiStyle()
-            _uiState.update { it.copy(currentUiStyle = style) }
-        }
-    }
-
-    fun setUiStyle(styleId: String) {
-        viewModelScope.launch {
-            if (themeEngineProxy.setUiStyle(styleId)) {
-                _uiState.update { it.copy(currentUiStyle = styleId) }
-                updateInstallStates(_uiState.value.themes)
-            }
-        }
-    }
-    
     fun loadThemes(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -115,28 +98,25 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
                     val allThemes = response.themes + thirdPartyThemes
                     
                     val baseCategories = response.categories
-                    
-                    val hasLocalIconThemes = thirdPartyThemes.any { it.category == "icon_themes" }
-                    val hasIconThemeCategory = baseCategories.any { it.id == "icon_themes" }
-                    
-                    val categoriesWithIconThemes = if (hasLocalIconThemes && !hasIconThemeCategory) {
-                        baseCategories + ThemeCategory(
-                            id = "icon_themes",
-                            name = "Icon Packs",
-                            icon = "extensions"
-                        )
-                    } else {
-                        baseCategories
-                    }
 
-                    val categories = if (thirdPartyThemes.isNotEmpty()) {
-                        categoriesWithIconThemes + ThemeCategory(
-                            id = "local",
-                            name = "Installed",
-                            icon = "category"
-                        )
-                    } else {
-                        categoriesWithIconThemes
+                    val extraCategories = thirdPartyThemes
+                        .map { it.category }
+                        .distinct()
+                        .filter { cat -> cat != "local" && baseCategories.none { it.id == cat } }
+                        .map { cat ->
+                            ThemeCategory(
+                                id = cat,
+                                name = cat.replace('_', ' ')
+                                    .split(' ')
+                                    .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } },
+                                icon = "palette"
+                            )
+                        }
+
+                    val categories = (baseCategories + extraCategories).let { cats ->
+                        if (thirdPartyThemes.any { it.category == "local" }) {
+                            cats + ThemeCategory(id = "local", name = "Installed", icon = "category")
+                        } else cats
                     }
                     
                     _uiState.update { state ->
@@ -174,19 +154,11 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
     
     private fun updateInstallStates(themes: List<Theme>) {
-        val currentStyle = themeEngineProxy.getUiStyle()
         val currentIconTheme = themeEngineProxy.getIconTheme()
         val enabledThemes = themeEngineProxy.getEnabledThemes()
-        
+
         val states = themes.associate { theme ->
             val state = when {
-                theme.isUiStyle -> {
-                    if (theme.uiStyleId == currentStyle) {
-                        ThemeInstallState.Installed(theme.versionCode)
-                    } else {
-                        ThemeInstallState.NotInstalled
-                    }
-                }
                 theme.isUnified && theme.overlays.isNotEmpty() -> {
                     val packageName = theme.overlays.first().packageName
                     val isInstalled = repository.isThemeInstalled(packageName)
@@ -276,10 +248,6 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
     
     fun downloadTheme(theme: Theme) {
-        if (theme.isUiStyle) {
-            return
-        }
-        
         if (theme.overlays.isEmpty()) {
             _themeStates.update { 
                 it + (theme.id to ThemeInstallState.Error("No overlays available")) 
@@ -320,10 +288,6 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun installTheme(theme: Theme) {
-        if (theme.isUiStyle) {
-             return
-        }
-
         val currentState = _themeStates.value[theme.id]
         if (currentState !is ThemeInstallState.Downloaded) {
             _themeStates.update { 
@@ -519,24 +483,6 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun applyTheme(theme: Theme) {
-        if (theme.isUiStyle) {
-            val styleId = theme.uiStyleId
-            if (styleId != null) {
-                viewModelScope.launch {
-                    if (themeEngineProxy.setUiStyle(styleId)) {
-                        _uiState.update { it.copy(currentUiStyle = styleId) }
-                        updateInstallStates(_uiState.value.themes)
-                        Log.d(TAG, "Activated UI style: $styleId")
-                    } else {
-                        _themeStates.update { 
-                            it + (theme.id to ThemeInstallState.Error("Failed to activate style")) 
-                        }
-                    }
-                }
-            }
-            return
-        }
-        
         if (theme.overlays.isEmpty()) {
             _themeStates.update { 
                 it + (theme.id to ThemeInstallState.Error("No overlays available")) 
@@ -858,7 +804,6 @@ data class ThemeStoreUiState(
     val selectedCategory: String? = null,
     val searchQuery: String = "",
     val error: String? = null,
-    val currentUiStyle: String = ThemeEngineProxy.Companion.UiStyle.AXION,
     val iconPacks: List<IconPack> = emptyList(),
     val currentIconPack: String? = null,
     val themedIconStyle: String = ThemeEngineProxy.Companion.ThemedIconStyle.AXION,

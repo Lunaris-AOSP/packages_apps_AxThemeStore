@@ -38,6 +38,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.ColorFilter
@@ -53,6 +54,9 @@ import com.android.axion.axthemestore.data.model.ThemeOverlay
 import com.android.axion.axthemestore.data.model.formatFileSize
 import com.android.axion.axthemestore.data.model.hasUpdate
 import com.android.axion.axthemestore.ui.components.AsyncNetworkImage
+import com.android.axion.axthemestore.ui.components.BackGesturePreview
+import com.android.axion.axthemestore.ui.components.BatteryStylePreview
+import com.android.axion.axthemestore.ui.components.ChargingAnimationBannerPreview
 import com.android.axion.axthemestore.ui.components.ImagePlaceholder
 import com.android.axion.axthemestore.ui.components.ThemePackagePreview
 import com.android.axion.axthemestore.viewmodel.ThemeStoreViewModel
@@ -116,14 +120,12 @@ fun ThemeDetailScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            val packageName = theme.overlays.firstOrNull()?.packageName
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
             ) {
-                DetailPreviewBox(packageName = packageName ?: "")
+                DetailPreviewBox(theme = theme)
             }
             
             Column(
@@ -770,7 +772,9 @@ private fun InstallSection(
 }
 
 @Composable
-private fun DetailPreviewBox(packageName: String) {
+private fun DetailPreviewBox(theme: Theme) {
+    val packageName = theme.overlays.firstOrNull()?.packageName ?: ""
+    val category = theme.category.ifEmpty { theme.overlays.firstOrNull()?.componentId ?: "" }
     val context = LocalContext.current
     val previewMap = remember {
         val map = mutableMapOf<String, String>()
@@ -792,49 +796,71 @@ private fun DetailPreviewBox(packageName: String) {
         }
     } else emptyList()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                        MaterialTheme.colorScheme.surfaceContainer
-                    )
+    val isChargingAnim = packageName.contains("charging_animation") || category.contains("charging_animation")
+    val bgModifier = if (isChargingAnim) {
+        Modifier.background(Color.Black)
+    } else {
+        Modifier.background(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                    MaterialTheme.colorScheme.surfaceContainer
                 )
-            ),
+            )
+        )
+    }
+    Box(
+        modifier = Modifier.fillMaxSize().then(bgModifier),
         contentAlignment = Alignment.Center
     ) {
-        if (resIds.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                resIds.forEach { resId ->
-                    val drawable = remember(resId) {
-                        ContextCompat.getDrawable(context, resId)
-                    }
-                    if (drawable != null) {
-                        Image(
-                            bitmap = remember(drawable) {
-                                drawable.toBitmap().asImageBitmap()
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            colorFilter = ColorFilter.tint(
-                                MaterialTheme.colorScheme.onSurface
+        when {
+            isChargingAnim -> {
+                ChargingAnimationBannerPreview(
+                    packageName = packageName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            packageName.contains("battery") || category.contains("battery") -> {
+                BatteryStylePreview(
+                    packageName = packageName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            packageName.contains("back_gesture") || category.contains("back_gesture") -> {
+                BackGesturePreview(modifier = Modifier.fillMaxSize())
+            }
+            resIds.isNotEmpty() -> {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    resIds.forEach { resId ->
+                        val drawable = remember(resId) {
+                            ContextCompat.getDrawable(context, resId)
+                        }
+                        if (drawable != null) {
+                            Image(
+                                bitmap = remember(drawable) {
+                                    drawable.toBitmap().asImageBitmap()
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                colorFilter = ColorFilter.tint(
+                                    MaterialTheme.colorScheme.onSurface
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
-        } else {
-            Icon(
-                imageVector = Icons.Default.Palette,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            else -> {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

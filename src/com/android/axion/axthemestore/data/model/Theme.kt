@@ -38,7 +38,8 @@ data class Theme(
     val category: String = "",
     val tags: List<String> = emptyList(),
     val overlays: List<ThemeOverlay> = emptyList(),
-    val isUnified: Boolean = false
+    val isUnified: Boolean = false,
+    val supportsRegionSampling: Boolean = false
 ) {
     val totalFileSize: Long
         get() = overlays.sumOf { it.fileSize }
@@ -120,14 +121,17 @@ fun Long.formatFileSize(): String {
 object StandardComponents {
     const val STATUSBAR_WIFI = "statusbar_wifi"
     const val STATUSBAR_SIGNAL = "statusbar_signal"
-    
+
     const val ANDROID_FRAMEWORK = "android"
     const val SYSTEMUI = "systemui"
-    
+
     const val UI_QS = "ui_qs"
     const val UI_VOLUME = "ui_volume"
-    
+
     const val ICON_PACK = "icon_pack"
+    const val BACK_GESTURE = "back_gesture"
+    const val CHARGING_ANIMATION = "charging_animation"
+    const val BATTERY_STYLE = "battery_style"
 }
 
 data class IconPack(

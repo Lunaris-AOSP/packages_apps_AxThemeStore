@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -262,6 +263,7 @@ private fun LocalPreviewBox(theme: Theme) {
     }
 
     val packageName = theme.overlays.firstOrNull()?.packageName ?: ""
+    val category = theme.category.ifEmpty { theme.overlays.firstOrNull()?.componentId ?: "" }
     val prefix = previewMap[packageName] ?: ""
     val resIds = if (prefix.isNotEmpty()) {
         (1..4).mapNotNull { i ->
@@ -269,6 +271,9 @@ private fun LocalPreviewBox(theme: Theme) {
             if (id != 0) id else null
         }
     } else emptyList()
+
+    val isBattery = packageName.contains("battery") || category.contains("battery")
+    val isBackGesture = packageName.contains("back_gesture") || category.contains("back_gesture")
 
     Box(
         modifier = Modifier
@@ -299,13 +304,37 @@ private fun LocalPreviewBox(theme: Theme) {
                     )
                 }
             }
+        } else if (isBattery) {
+            BatteryStylePreview(
+                packageName = packageName,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (isBackGesture) {
+            BackGesturePreview(modifier = Modifier.fillMaxSize())
         } else {
             Icon(
-                imageVector = Icons.Default.Download,
+                imageVector = categoryIcon(theme),
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
+    }
+}
+
+private fun categoryIcon(theme: Theme): ImageVector {
+    val category = theme.category.ifEmpty {
+        theme.overlays.firstOrNull()?.componentId ?: ""
+    }
+    return when {
+        "charging" in category -> Icons.Default.BatteryChargingFull
+        "battery" in category -> Icons.Default.BatteryFull
+        "wifi" in category -> Icons.Default.Wifi
+        "signal" in category -> Icons.Default.SignalCellular4Bar
+        "icon_pack" in category -> Icons.Default.Apps
+        "back_gesture" in category -> Icons.Default.Gesture
+        "volume" in category -> Icons.Default.VolumeUp
+        "ui_qs" in category || "qs" in category -> Icons.Default.Dashboard
+        else -> Icons.Default.Palette
     }
 }
