@@ -37,7 +37,7 @@ class ThemeRepository(private val context: Context) {
     companion object {
         private const val TAG = "ThemeRepository"
         private const val THEMES_JSON_URL = 
-            "https://raw.githubusercontent.com/AxionAOSP/AxThemeStore_themes_repository/lineage-23.2/themes.json"
+            "https://raw.githubusercontent.com/Lunaris-AOSP/AxThemeStore_themes_repository/16.2/themes.json"
         private const val CACHE_DURATION_MS = 0L
     }
     
