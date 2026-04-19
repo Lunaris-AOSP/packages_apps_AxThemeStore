@@ -132,13 +132,37 @@ class ThemeStoreViewModel(application: Application) : AndroidViewModel(applicati
                     refreshComponentStates()
                 },
                 onFailure = { error ->
-                    Log.e(TAG, "Failed to load themes", error)
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false, 
-                            error = error.message ?: "Failed to load themes"
-                        ) 
+                    Log.e(TAG, "Failed to load themes, entering offline mode", error)
+
+                    val thirdPartyThemes = repository.getInstalledThirdPartyThemes(emptySet())
+
+                    val offlineCategories = thirdPartyThemes
+                        .map { it.category }
+                        .distinct()
+                        .map { cat ->
+                            ThemeCategory(
+                                id = cat,
+                                name = cat.replace('_', ' ')
+                                    .split(' ')
+                                    .joinToString(" ") { part ->
+                                        part.replaceFirstChar { c -> c.uppercase() }
+                                    },
+                                icon = "palette"
+                            )
+                        }
+
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            themes = thirdPartyThemes,
+                            categories = offlineCategories,
+                            error = if (thirdPartyThemes.isEmpty())
+                                error.message ?: "Failed to load themes"
+                            else null
+                        )
                     }
+                    updateInstallStates(thirdPartyThemes)
+                    refreshComponentStates()
                 }
             )
 

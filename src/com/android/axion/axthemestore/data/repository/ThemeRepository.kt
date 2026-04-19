@@ -29,16 +29,18 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.android.axion.axthemestore.data.model.IconPack
 import android.content.Intent
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
 class ThemeRepository(private val context: Context) {
-    
+
     companion object {
         private const val TAG = "ThemeRepository"
         private const val THEMES_JSON_URL = 
             "https://raw.githubusercontent.com/Lunaris-AOSP/AxThemeStore_themes_repository/16.2/themes.json"
         private const val CACHE_DURATION_MS = 0L
+        private const val CACHE_FILE_NAME = "themes_cache.json"
 
         private val THEMEPICKER_CATEGORIES = setOf(
             "android.theme.customization.font",
@@ -56,15 +58,18 @@ class ThemeRepository(private val context: Context) {
     
     private var cachedResponse: ThemesResponse? = null
     private var lastFetchTime: Long = 0
-    
+
+    private val cacheFile: File
+        get() = File(context.filesDir, CACHE_FILE_NAME)
+
     suspend fun fetchThemes(forceRefresh: Boolean = false): Result<ThemesResponse> {
         return withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            if (!forceRefresh && cachedResponse != null && 
+            if (!forceRefresh && cachedResponse != null &&
                 (now - lastFetchTime) < CACHE_DURATION_MS) {
                 return@withContext Result.success(cachedResponse!!)
             }
-            
+
             try {
                 val urlWithCacheBust = "$THEMES_JSON_URL?t=$now"
                 val url = URL(urlWithCacheBust)
@@ -76,33 +81,49 @@ class ThemeRepository(private val context: Context) {
                     setRequestProperty("Accept", "application/json")
                     setRequestProperty("Cache-Control", "no-cache")
                 }
-                
+
                 val responseCode = connection.responseCode
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    return@withContext Result.failure(
-                        Exception("HTTP error: $responseCode")
-                    )
+                    return@withContext loadDiskCache()
+                        ?.let { Result.success(it) }
+                        ?: Result.failure(Exception("HTTP error: $responseCode"))
                 }
-                
+
                 val jsonResponse = connection.inputStream.bufferedReader().use { it.readText() }
                 connection.disconnect()
-                
+
                 val response = parseThemesResponse(jsonResponse)
                 cachedResponse = response
                 lastFetchTime = now
-                
+
+                runCatching { cacheFile.writeText(jsonResponse) }
+                    .onFailure { Log.w(TAG, "Failed to persist themes cache", it) }
+
                 Log.d(TAG, "Fetched ${response.themes.size} themes")
-                response.themes.forEach { theme ->
-                    Log.d(TAG, "Theme: ${theme.name}, previews: ${theme.previewImages}")
-                }
-                
+
                 Result.success(response)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch themes", e)
-                Result.failure(e)
+                Log.e(TAG, "Failed to fetch themes, trying disk cache", e)
+                loadDiskCache()
+                    ?.let { Result.success(it) }
+                    ?: Result.failure(e)
             }
         }
     }
+
+    private fun loadDiskCache(): ThemesResponse? {
+        cachedResponse?.let { return it }
+        val file = cacheFile
+        if (!file.exists()) return null
+        return runCatching {
+            val response = parseThemesResponse(file.readText())
+            cachedResponse = response
+            Log.d(TAG, "Loaded ${response.themes.size} themes from disk cache")
+            response
+        }.getOrNull()
+    }
+
+    fun hasDiskCache(): Boolean = cachedResponse != null || cacheFile.exists()
     
     private fun parseThemesResponse(jsonStr: String): ThemesResponse {
         val json = JSONObject(jsonStr)
