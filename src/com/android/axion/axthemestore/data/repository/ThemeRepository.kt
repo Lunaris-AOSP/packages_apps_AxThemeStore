@@ -53,6 +53,14 @@ class ThemeRepository(private val context: Context) {
             "android.theme.customization.system_palette",
             "android.theme.customization.accent_color",
             "android.theme.customization.color_source",
+            "android.theme.customization.lockscreen_clock_font",
+            "android.theme.customization.settings",
+            "android.theme.customization.qs_panel",
+            "android.theme.customization.navbar",
+            "android.theme.customization.hideclock",
+            "android.theme.customization.smartspace",
+            "android.theme.customization.smartspace_offset",
+            "android.theme.customization.wallpaper",
         )
     }
     
