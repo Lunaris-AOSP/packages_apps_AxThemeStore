@@ -21,6 +21,7 @@ import android.os.SystemProperties
 import android.os.UserHandle
 import android.provider.Settings
 import com.android.internal.statusbar.IStatusBarService
+import com.android.internal.util.lunaris.FontController
 import com.android.internal.util.lunaris.ThemeUtils
 import java.io.File
 import java.io.FileInputStream
@@ -70,9 +71,14 @@ class SystemFontController(private val context: Context) {
                             if (name == "NothingDot57") "config_headlineFontFamily"
                             else "config_bodyFontFamily"
                         val id = resources.getIdentifier(familyKey, "string", pkg)
-                        val typeface =
-                            if (id == 0) Typeface.DEFAULT
-                            else Typeface.create(resources.getString(id), Typeface.NORMAL)
+                        val family =
+                            if (pkg == "android" || id == 0) {
+                                SystemProperties.get(
+                                    FontController.PROP_DEFAULT_FONT,
+                                    FontController.GSF_FONT,
+                                )
+                            } else resources.getString(id)
+                        val typeface = Typeface.getSystemDefaultTypeface(family)
                         BundledFont(pkg, name, typeface)
                     }
                     .getOrNull()
@@ -101,16 +107,57 @@ class SystemFontController(private val context: Context) {
                     )
                     .joinToString(":") { key ->
                         val id = res.getIdentifier(key, "string", font.packageName)
-                        if (id != 0) res.getString(id) else font.packageName
+                        if (id != 0) res.getString(id) else ""
                     }
             }
-        themeUtils.setOverlayEnabled(CATEGORY, font.packageName, "android")
-        val selected =
-            themeUtils.getOverlayInfos(CATEGORY).firstOrNull { it.isEnabled }?.packageName
-                ?: "android"
-        check(selected == font.packageName) { "Could not apply the font overlay" }
-        SystemProperties.set(OVERLAY_PROPERTY, property)
-        putCustomName("")
+        applySelection(font.packageName, property, "")
+    }
+
+    private fun applySelection(packageName: String, property: String, customName: String) {
+        val previous = selection()
+        val previousProperty = SystemProperties.get(OVERLAY_PROPERTY, "")
+        val previousOverlays =
+            Settings.Secure.getStringForUser(
+                resolver,
+                Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
+                UserHandle.USER_CURRENT,
+            )
+        val overlays =
+            if (previousOverlays.isNullOrBlank()) JSONObject() else JSONObject(previousOverlays)
+        if (packageName == "android") overlays.remove(CATEGORY)
+        else overlays.put(CATEGORY, packageName)
+        try {
+            SystemProperties.set(OVERLAY_PROPERTY, property)
+            putCustomName(customName)
+            themeUtils.setOverlayEnabled(CATEGORY, packageName, "android")
+            val selected =
+                themeUtils.getOverlayInfos(CATEGORY).firstOrNull { it.isEnabled }?.packageName
+                    ?: "android"
+            check(selected == packageName) { "Could not apply the font overlay" }
+            writeOverlays(overlays)
+        } catch (e: Exception) {
+            fun restore(action: () -> Unit) {
+                try {
+                    action()
+                } catch (failure: Exception) {
+                    e.addSuppressed(failure)
+                }
+            }
+            restore { SystemProperties.set(OVERLAY_PROPERTY, previousProperty) }
+            restore { putCustomName(previous.customFontName) }
+            restore { themeUtils.setOverlayEnabled(CATEGORY, previous.overlayPackage, "android") }
+            restore {
+                check(
+                    Settings.Secure.putStringForUser(
+                        resolver,
+                        Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
+                        previousOverlays,
+                        UserHandle.USER_CURRENT,
+                    )
+                )
+            }
+            throw e
+        }
     }
 
     fun install(file: File): String {
@@ -149,29 +196,37 @@ class SystemFontController(private val context: Context) {
 
     private fun installStaged(file: File): String {
         val name = postScriptName(file)
-        val variable =
+        val (supportedAxes, style) =
             FileInputStream(file).use { stream ->
                 val buffer =
                     stream.channel.map(FileChannel.MapMode.READ_ONLY, 0, stream.channel.size())
-                FontFileUtil.getSupportedAxes(buffer, 0).contains(0x77676874)
+                FontFileUtil.getSupportedAxes(buffer, 0) to FontFileUtil.analyzeStyle(buffer, 0, null)
+            }
+        require(FontFileUtil.isSuccess(style)) { "Could not read the font style" }
+        val hasWeightAxis = supportedAxes.contains(0x77676874)
+        val hasItalicAxis = supportedAxes.contains(0x6974616c)
+        val weights =
+            if (hasWeightAxis) (100..900 step 100).toList()
+            else listOf(FontFileUtil.unpackWeight(style))
+        val slants =
+            if (hasItalicAxis) {
+                listOf(FontStyle.FONT_SLANT_UPRIGHT, FontStyle.FONT_SLANT_ITALIC)
+            } else {
+                listOf(
+                    if (FontFileUtil.unpackItalic(style)) FontStyle.FONT_SLANT_ITALIC
+                    else FontStyle.FONT_SLANT_UPRIGHT
+                )
             }
         val fonts = mutableListOf<FontFamilyUpdateRequest.Font>()
-        if (variable) {
-            for (weight in 100..900 step 100) {
-                for (slant in listOf(FontStyle.FONT_SLANT_UPRIGHT, FontStyle.FONT_SLANT_ITALIC)) {
-                    fonts +=
-                        FontFamilyUpdateRequest.Font.Builder(name, FontStyle(weight, slant))
-                            .setAxes(listOf(FontVariationAxis("wght", weight.toFloat())))
-                            .build()
+        for (weight in weights) {
+            for (slant in slants) {
+                val axes = buildList {
+                    if (hasWeightAxis) add(FontVariationAxis("wght", weight.toFloat()))
+                    if (hasItalicAxis) add(FontVariationAxis("ital", slant.toFloat()))
                 }
-            }
-        } else {
-            for (weight in listOf(FontStyle.FONT_WEIGHT_NORMAL, FontStyle.FONT_WEIGHT_BOLD)) {
                 fonts +=
-                    FontFamilyUpdateRequest.Font.Builder(
-                            name,
-                            FontStyle(weight, FontStyle.FONT_SLANT_UPRIGHT),
-                        )
+                    FontFamilyUpdateRequest.Font.Builder(name, FontStyle(weight, slant))
+                        .setAxes(axes)
                         .build()
             }
         }
@@ -185,17 +240,11 @@ class SystemFontController(private val context: Context) {
             val result = manager.updateFontFamily(request, manager.fontConfig.configVersion)
             check(result == FontManager.RESULT_SUCCESS) { "Font service returned " + result }
         }
-        SystemProperties.set(OVERLAY_PROPERTY, List(4) { EXTERNAL_FAMILY }.joinToString(":"))
-        val raw =
-            Settings.Secure.getStringForUser(
-                resolver,
-                Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
-                UserHandle.USER_CURRENT,
-            )
-        val overlays = if (raw.isNullOrBlank()) JSONObject() else JSONObject(raw)
-        overlays.put(CATEGORY, EXTERNAL_OVERLAY)
-        writeOverlays(overlays)
-        putCustomName(name)
+        applySelection(
+            EXTERNAL_OVERLAY,
+            List(4) { EXTERNAL_FAMILY }.joinToString(":"),
+            name,
+        )
         return name
     }
 
@@ -253,7 +302,7 @@ class SystemFontController(private val context: Context) {
         const val MAX_FONT_BYTES = 50L * 1024 * 1024
         const val CUSTOM_NAME = "custom_font_name"
         const val CATEGORY = "android.theme.customization.font"
-        const val OVERLAY_PROPERTY = "persist.sys.ax_overlay_fonts"
+        const val OVERLAY_PROPERTY = FontController.PROP_OVERLAY_FONTS
         const val EMOJI_PROPERTY = "persist.sys.ax_emoji_style"
         const val EXTERNAL_FAMILY = "ext_font"
         const val EXTERNAL_OVERLAY = "com.android.theme.font.extfont"
