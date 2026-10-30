@@ -651,7 +651,7 @@ private fun FontPreviewSheet(
         )
     var sample by rememberSaveable(preview.name) { mutableStateOf("") }
     val family = remember(preview.typeface) { FontFamily(preview.typeface) }
-    ModalBottomSheet(
+    StoreModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -748,7 +748,7 @@ private fun EmojiStyleSheet(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
 ) {
-    ModalBottomSheet(
+    StoreModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
