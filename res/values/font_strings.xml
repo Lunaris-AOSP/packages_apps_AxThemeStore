@@ -20,6 +20,9 @@
     <string name="font_preview">Preview</string>
     <string name="font_preview_description">See how this font looks before applying it.</string>
     <string name="font_apply">Apply font</string>
+    <string name="font_delete">Delete</string>
+    <string name="font_deleting">Deleting font</string>
+    <string name="font_deleted">Downloaded font deleted</string>
     <string name="font_sample_title">The quick brown fox</string>
     <string name="font_sample_subtitle">Jumps over the lazy dog.</string>
     <string name="font_sample_body">Little details make a big difference. Pack my box with five dozen liquor jugs.</string>

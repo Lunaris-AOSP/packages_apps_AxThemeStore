@@ -58,7 +58,18 @@ class FontRepository(private val context: Context) {
         runCatching { catalogCache.openRead().bufferedReader().use { parseCatalog(it.readText()) } }
             .getOrDefault(emptyList())
 
-    fun downloadedCatalog(): List<DownloadableFont> = downloadedFiles().keys.map(::catalogFont)
+    fun downloadedCatalog(): List<DownloadableFont> =
+        downloadedFiles().keys.map(::catalogFont).sortedBy { it.name.lowercase() }
+
+    fun deleteDownload(fileName: String) {
+        require(isFontFileName(fileName))
+        for (directory in listOf(legacyLibrary, library)) {
+            val file = File(directory, fileName)
+            check(!file.exists() || (file.isFile && file.delete())) {
+                "Could not delete the downloaded font"
+            }
+        }
+    }
 
     suspend fun fetchCatalog(): List<DownloadableFont> {
         val connection = openConnection(CATALOG_URL)

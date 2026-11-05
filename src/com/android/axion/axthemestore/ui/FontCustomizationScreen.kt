@@ -77,6 +77,12 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
         remember(state.catalog, query) {
             state.catalog.filter { it.name.contains(query.trim(), true) }
         }
+    val savedFonts =
+        remember(state.downloaded, query) {
+            state.downloaded.filter { it.name.contains(query.trim(), true) }
+        }
+    val downloadedFileNames =
+        remember(state.downloaded) { state.downloaded.map { it.fileName }.toSet() }
     val emojiNames = stringArrayResource(R.array.font_emoji_entries)
     val emojiIndex =
         SystemFontController.EMOJI_STYLES.indexOf(state.selection.emojiStyle).coerceAtLeast(0)
@@ -253,8 +259,8 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
                             else
                                 pluralStringResource(
                                     R.plurals.font_collection_count,
-                                    fonts.size,
-                                    fonts.size,
+                                    fonts.size + savedFonts.size,
+                                    fonts.size + savedFonts.size,
                                 ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -305,36 +311,7 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
                         }
                     }
                 }
-                if (github) {
-                    items(catalog, key = { "github_" + it.fileName }) { font ->
-                        val downloaded = font.fileName in state.downloaded
-                        val typeface by
-                            produceState<Typeface?>(null, font.fileName, downloaded) {
-                                value = if (downloaded) viewModel.downloadedTypeface(font) else null
-                            }
-                        FontTile(
-                            font.name,
-                            typeface,
-                            if (state.operation == font.name && state.progress != null)
-                                stringResource(
-                                    R.string.download_progress,
-                                    ((state.progress ?: 0f) * 100).toInt(),
-                                )
-                            else
-                                stringResource(
-                                    if (downloaded) R.string.font_saved
-                                    else R.string.font_download_preview
-                                ),
-                            enabled = !busy,
-                            loading = state.operation == font.name,
-                            progress = state.progress,
-                            onClick = {
-                                keyboard?.hide()
-                                viewModel.previewDownload(font)
-                            },
-                        )
-                    }
-                } else {
+                if (!github) {
                     items(fonts, key = { "bundled_" + it.packageName }) { font ->
                         val active =
                             state.selection.customFontName.isEmpty() &&
@@ -352,10 +329,41 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
                         )
                     }
                 }
+                items(
+                    if (github) catalog else savedFonts,
+                    key = { "download_" + it.fileName },
+                ) { font ->
+                    val downloaded = font.fileName in downloadedFileNames
+                    val typeface by
+                        produceState<Typeface?>(null, font.fileName, downloaded) {
+                            value = if (downloaded) viewModel.downloadedTypeface(font) else null
+                        }
+                    FontTile(
+                        font.name,
+                        typeface,
+                        if (state.operation == font.name && state.progress != null)
+                            stringResource(
+                                R.string.download_progress,
+                                ((state.progress ?: 0f) * 100).toInt(),
+                            )
+                        else
+                            stringResource(
+                                if (downloaded) R.string.font_saved
+                                else R.string.font_download_preview
+                            ),
+                        enabled = !busy,
+                        loading = state.operation == font.name,
+                        progress = state.progress,
+                        onClick = {
+                            keyboard?.hide()
+                            viewModel.previewDownload(font)
+                        },
+                    )
+                }
                 if (
                     !state.loading &&
                         !(github && state.catalogLoading) &&
-                        (if (github) catalog.isEmpty() else fonts.isEmpty())
+                        (if (github) catalog.isEmpty() else fonts.isEmpty() && savedFonts.isEmpty())
                 ) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         Column(
@@ -382,8 +390,15 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
             }
         }
     }
-    state.preview?.let {
-        FontPreviewSheet(it, busy, viewModel::dismissPreview, viewModel::applyPreview)
+    state.preview?.let { preview ->
+        FontPreviewSheet(
+            preview = preview,
+            busy = busy,
+            deleting = state.operation == stringResource(R.string.font_deleting),
+            onDismiss = viewModel::dismissPreview,
+            onApply = viewModel::applyPreview,
+            onDelete = if (preview.downloadedFileName != null) viewModel::deletePreview else null,
+        )
     }
     if (showEmoji)
         EmojiStyleSheet(state.selection.emojiStyle, emojiNames, onDismiss = { showEmoji = false }) {
@@ -640,8 +655,10 @@ private fun FontOperation(state: FontUiState) {
 private fun FontPreviewSheet(
     preview: FontPreview,
     busy: Boolean,
+    deleting: Boolean,
     onDismiss: () -> Unit,
     onApply: () -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
     val latestBusy by rememberUpdatedState(busy)
     val sheetState =
@@ -724,18 +741,45 @@ private fun FontPreviewSheet(
                     )
                 }
             }
-            Button(
-                onClick = onApply,
-                enabled = !busy,
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                        .heightIn(min = 56.dp),
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (busy) LoadingIndicator(Modifier.size(24.dp))
-                else Icon(Icons.Default.Check, null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(if (busy) R.string.font_applying else R.string.font_apply))
+                if (onDelete != null) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                        colors =
+                            ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                    ) {
+                        if (deleting) LoadingIndicator(Modifier.size(24.dp))
+                        else Icon(Icons.Default.DeleteOutline, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(
+                                if (deleting) R.string.font_deleting else R.string.font_delete
+                            )
+                        )
+                    }
+                }
+                Button(
+                    onClick = onApply,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                ) {
+                    if (busy && !deleting) LoadingIndicator(Modifier.size(24.dp))
+                    else Icon(Icons.Default.Check, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(
+                            if (busy && !deleting) R.string.font_applying else R.string.font_apply
+                        )
+                    )
+                }
             }
         }
     }

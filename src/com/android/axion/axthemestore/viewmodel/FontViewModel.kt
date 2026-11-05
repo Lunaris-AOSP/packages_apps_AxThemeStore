@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 data class FontUiState(
     val bundled: List<BundledFont> = emptyList(),
     val catalog: List<DownloadableFont> = emptyList(),
-    val downloaded: Set<String> = emptySet(),
+    val downloaded: List<DownloadableFont> = emptyList(),
     val selection: FontSelection = FontSelection(),
     val activeTypeface: Typeface? = null,
     val loading: Boolean = true,
@@ -63,10 +63,10 @@ class FontViewModel(application: Application) : AndroidViewModel(application) {
                     val fonts = withContext(Dispatchers.IO) { repository.system.bundledFonts() }
                     val selection = withContext(Dispatchers.IO) { repository.system.selection() }
                     val downloaded =
-                        withContext(Dispatchers.IO) { repository.downloadedFiles().keys }
+                        withContext(Dispatchers.IO) { repository.downloadedCatalog() }
                     val cached =
                         withContext(Dispatchers.IO) {
-                            (repository.cachedCatalog() + repository.downloadedCatalog())
+                            (repository.cachedCatalog() + downloaded)
                                 .distinctBy { it.fileName }
                         }
                     _state.update {
@@ -134,8 +134,9 @@ class FontViewModel(application: Application) : AndroidViewModel(application) {
                 repository.download(font) { progress ->
                     _state.update { it.copy(progress = progress) }
                 }
-            val preview = repository.system.preview(file, font.name)
-            val downloaded = repository.downloadedFiles().keys
+            val preview =
+                repository.system.preview(file, font.name).copy(downloadedFileName = font.fileName)
+            val downloaded = repository.downloadedCatalog()
             _state.update { it.copy(preview = preview, downloaded = downloaded) }
         }
 
@@ -161,6 +162,22 @@ class FontViewModel(application: Application) : AndroidViewModel(application) {
         if (_state.value.operation != null) return
         repository.releasePreview(_state.value.preview)
         _state.update { it.copy(preview = null) }
+    }
+
+    fun deletePreview() {
+        val fileName = _state.value.preview?.downloadedFileName ?: return
+        runOperation(text(R.string.font_deleting)) {
+            repository.deleteDownload(fileName)
+            typefaces.remove(fileName)
+            val downloaded = repository.downloadedCatalog()
+            _state.update {
+                it.copy(
+                    preview = null,
+                    downloaded = downloaded,
+                    message = text(R.string.font_deleted),
+                )
+            }
+        }
     }
 
     fun applyPreview() {

@@ -17,6 +17,7 @@ data class FontPreview(
     val typeface: Typeface,
     val file: File? = null,
     val overlayPackage: String? = null,
+    val downloadedFileName: String? = null,
 )
 
 data class FontSelection(
