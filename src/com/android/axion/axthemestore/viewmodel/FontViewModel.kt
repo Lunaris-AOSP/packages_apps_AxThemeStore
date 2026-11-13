@@ -230,21 +230,6 @@ class FontViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    fun setEmoji(style: String) =
-        runOperation(text(R.string.font_applying)) {
-            repository.system.setEmoji(style)
-            val selection = repository.system.selection()
-            repository.savePendingRestart(FontRestart.DEVICE)
-            _state.update {
-                it.copy(
-                    selection = selection,
-                    restartPrompt = FontRestart.DEVICE,
-                    pendingRestart = FontRestart.DEVICE,
-                    message = text(R.string.font_emoji_applied),
-                )
-            }
-        }
-
     fun showRestart() {
         _state.update { it.copy(restartPrompt = it.pendingRestart ?: FontRestart.DEVICE) }
     }

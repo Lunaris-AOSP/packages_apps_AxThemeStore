@@ -55,18 +55,10 @@
     <string name="font_restart_ui_description">Restart System UI to refresh the status bar and other system text with your new font.</string>
     <string name="font_later">Later</string>
     <string name="font_emoji">Emoji style</string>
-    <string name="font_emoji_description">A little more expression.</string>
     <string name="font_emoji_applied">Emoji style updated</string>
     <string name="font_emoji_sample" translatable="false">😀 🥰 🌈 ✨ 🎉</string>
     <string name="font_action_failed">Something went wrong</string>
     <string name="font_close">Close</string>
-    <string-array name="font_emoji_entries">
-        <item>Stock</item>
-        <item>iOS</item>
-        <item>Samsung</item>
-        <item>SwiftUI</item>
-        <item>Facebook</item>
-    </string-array>
     <plurals name="font_collection_count">
         <item quantity="one">%d font</item>
         <item quantity="other">%d fonts</item>

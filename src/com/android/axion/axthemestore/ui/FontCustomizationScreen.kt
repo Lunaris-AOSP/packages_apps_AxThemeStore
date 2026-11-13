@@ -31,7 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -43,15 +42,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.android.axion.axthemestore.R
 import com.android.axion.axthemestore.fonts.*
 import com.android.axion.axthemestore.ui.components.*
+import com.android.axion.axthemestore.viewmodel.EmojiViewModel
 import com.android.axion.axthemestore.viewmodel.FontUiState
 import com.android.axion.axthemestore.viewmodel.FontViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 
 @Composable
 fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val emojiViewModel: EmojiViewModel = composeViewModel()
+    val emojiState by emojiViewModel.state.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        emojiViewModel.refresh()
+        onPauseOrDispose {}
+    }
     var github by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showEmoji by rememberSaveable { mutableStateOf(false) }
@@ -64,7 +72,7 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let(viewModel::importFont)
         }
-    val busy = state.operation != null
+    val busy = state.operation != null || emojiState.operation != null
     val defaultName = stringResource(R.string.font_default)
     val fonts =
         remember(state.bundled, query, defaultName) {
@@ -83,9 +91,6 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
         }
     val downloadedFileNames =
         remember(state.downloaded) { state.downloaded.map { it.fileName }.toSet() }
-    val emojiNames = stringArrayResource(R.array.font_emoji_entries)
-    val emojiIndex =
-        SystemFontController.EMOJI_STYLES.indexOf(state.selection.emojiStyle).coerceAtLeast(0)
     LaunchedEffect(github) { if (github) viewModel.loadCatalog() }
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -171,7 +176,7 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         FontActionRow(
                             stringResource(R.string.font_emoji),
-                            emojiNames[emojiIndex],
+                            emojiState.currentLabel.ifEmpty { stringResource(R.string.emoji_stock) },
                             Icons.Default.EmojiEmotions,
                             enabled = !busy,
                             onClick = { showEmoji = true },
@@ -400,11 +405,16 @@ fun FontCustomizationScreen(viewModel: FontViewModel, bottomPadding: Dp = 100.dp
             onDelete = if (preview.downloadedFileName != null) viewModel::deletePreview else null,
         )
     }
-    if (showEmoji)
-        EmojiStyleSheet(state.selection.emojiStyle, emojiNames, onDismiss = { showEmoji = false }) {
-            showEmoji = false
-            if (it != state.selection.emojiStyle) viewModel.setEmoji(it)
+    if (showEmoji) {
+        EmojiCustomizationSheet(emojiViewModel, emojiState, onDismiss = { showEmoji = false })
+    }
+    EmojiDialogs(emojiViewModel, emojiState)
+    LaunchedEffect(emojiState.message) {
+        emojiState.message?.let {
+            snackbar.showSnackbar(it)
+            emojiViewModel.clearMessage()
         }
+    }
     if (confirmReset)
         AlertDialog(
             onDismissRequest = { confirmReset = false },
@@ -779,66 +789,6 @@ private fun FontPreviewSheet(
                             if (busy && !deleting) R.string.font_applying else R.string.font_apply
                         )
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmojiStyleSheet(
-    selected: String,
-    names: Array<String>,
-    onDismiss: () -> Unit,
-    onSelect: (String) -> Unit,
-) {
-    StoreModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    ) {
-        LazyColumn(
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.selectableGroup(),
-        ) {
-            item {
-                Column(
-                    Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.font_emoji),
-                        style = MaterialTheme.typography.headlineMediumEmphasized,
-                    )
-                    Text(
-                        stringResource(R.string.font_emoji_description),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        stringResource(R.string.font_emoji_sample),
-                        style = MaterialTheme.typography.headlineLarge,
-                    )
-                }
-            }
-            itemsIndexed(SystemFontController.EMOJI_STYLES) { index, style ->
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clip(storeGroupedShape(index, names.size))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .selectable(
-                            selected == style,
-                            role = Role.RadioButton,
-                            onClick = { onSelect(style) },
-                        )
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        names[index],
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    RadioButton(selected = selected == style, onClick = null)
                 }
             }
         }

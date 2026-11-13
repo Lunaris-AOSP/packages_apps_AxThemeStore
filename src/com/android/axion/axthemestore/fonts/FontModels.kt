@@ -23,7 +23,6 @@ data class FontPreview(
 data class FontSelection(
     val overlayPackage: String = "android",
     val customFontName: String = "",
-    val emojiStyle: String = "android",
 )
 
 enum class FontRestart {

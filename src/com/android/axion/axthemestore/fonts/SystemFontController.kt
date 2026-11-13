@@ -42,15 +42,6 @@ class SystemFontController(private val context: Context) {
             customFontName =
                 Settings.Secure.getStringForUser(resolver, CUSTOM_NAME, UserHandle.USER_CURRENT)
                     .orEmpty(),
-            emojiStyle =
-                SystemProperties.get(
-                    EMOJI_PROPERTY,
-                    Settings.System.getStringForUser(
-                        resolver,
-                        "emoji_style",
-                        UserHandle.USER_CURRENT,
-                    ) ?: "android",
-                ),
         )
 
     fun bundledFonts(): List<BundledFont> =
@@ -250,19 +241,6 @@ class SystemFontController(private val context: Context) {
 
     fun reset() = applyBundled(BundledFont("android", "", Typeface.DEFAULT))
 
-    fun setEmoji(style: String) {
-        require(style in EMOJI_STYLES)
-        SystemProperties.set(EMOJI_PROPERTY, style)
-        check(
-            Settings.System.putStringForUser(
-                resolver,
-                "emoji_style",
-                style,
-                UserHandle.USER_CURRENT,
-            )
-        )
-    }
-
     fun restart(kind: FontRestart) {
         val service =
             checkNotNull(IStatusBarService.Stub.asInterface(ServiceManager.getService("statusbar")))
@@ -303,9 +281,7 @@ class SystemFontController(private val context: Context) {
         const val CUSTOM_NAME = "custom_font_name"
         const val CATEGORY = "android.theme.customization.font"
         const val OVERLAY_PROPERTY = FontController.PROP_OVERLAY_FONTS
-        const val EMOJI_PROPERTY = "persist.sys.ax_emoji_style"
         const val EXTERNAL_FAMILY = "ext_font"
         const val EXTERNAL_OVERLAY = "com.android.theme.font.extfont"
-        val EMOJI_STYLES = listOf("android", "ios", "samsung", "swiftui", "facebook")
     }
 }

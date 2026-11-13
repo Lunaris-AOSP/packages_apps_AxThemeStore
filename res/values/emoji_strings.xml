@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024-2026 Lunaris AOSP
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="emoji_stock">Stock</string>
+    <string name="emoji_description">Choose your own emoji or download a new style.</string>
+    <string name="emoji_current">Current emoji</string>
+    <string name="emoji_import">Choose emoji font</string>
+    <string name="emoji_import_description">Preview a TTF emoji font from your device</string>
+    <string name="emoji_online">Online</string>
+    <string name="emoji_search">Search emoji styles</string>
+    <string name="emoji_selected">Selected</string>
+    <string name="emoji_apply">Apply emoji</string>
+    <string name="emoji_apply_description">Apps that use system emoji switch to this style when they restart. You can restart System UI and running apps after applying.</string>
+    <string name="emoji_download">Download</string>
+    <string name="emoji_download_apply">Download and apply</string>
+    <string name="emoji_delete_download">Delete download</string>
+    <string name="emoji_reading">Preparing emoji preview</string>
+    <string name="emoji_applying">Applying %1$s</string>
+    <string name="emoji_downloading">Downloading %1$s</string>
+    <string name="emoji_downloaded_message">%1$s downloaded. Find it in On device.</string>
+    <string name="emoji_deleting">Deleting emoji download</string>
+    <string name="emoji_deleted">Emoji download deleted</string>
+    <string name="emoji_restoring">Restoring stock emoji</string>
+    <string name="emoji_restore">Use stock emoji</string>
+    <string name="emoji_restore_title">Restore stock emoji?</string>
+    <string name="emoji_restore_description">Stock emoji will return after System UI and apps restart. Emoji copied into apps are restored and their font downloads are enabled again. Your saved downloads are kept.</string>
+    <string name="emoji_restart">Restart System UI and apps</string>
+    <string name="emoji_restart_pending">Restart to use your selected emoji in running apps.</string>
+    <string name="emoji_restart_description">This restarts System UI and closes running apps so they load the selected emoji. Google Play services and persistent system apps keep running. If you choose Later, apps switch the next time they start.</string>
+    <string name="emoji_update_apps">Update emoji in apps</string>
+    <string name="emoji_apps_description">Use your emoji in apps that keep their own fonts.</string>
+    <string name="emoji_apps_confirmation">This replaces emoji fonts in apps such as Facebook and Messenger and clears their font caches. Affected apps may close. Google\'s font provider is disabled until you restore stock emoji.</string>
+    <string name="emoji_updating_apps">Updating emoji in apps</string>
+    <string name="emoji_catalog_failed">Could not load online emoji. Saved styles are still available.</string>
+    <string name="emoji_retry">Tap to try again</string>
+    <string name="emoji_no_results">No matching emoji styles</string>
+    <string name="emoji_invalid_file">Choose a valid TTF font that contains emoji.</string>
+    <string name="emoji_not_installed">Choose and apply an emoji font first.</string>
+    <string name="emoji_updater_disabled">Custom emoji are unavailable on this device.</string>
+    <string name="emoji_verification_failed">Could not protect the selected emoji font. Try another file.</string>
+    <string name="emoji_download_failed">Could not download this emoji font. Check your connection and try again.</string>
+    <string name="emoji_checksum_failed">The downloaded font does not match the catalog. Please try downloading it again.</string>
+    <string name="emoji_state_failed">Could not save the emoji selection. Please try again.</string>
+    <string name="emoji_operation_failed">Could not update emoji. Please try again.</string>
+    <plurals name="emoji_apps_updated">
+        <item quantity="one">Updated %d emoji font in apps</item>
+        <item quantity="other">Updated %d emoji fonts in apps</item>
+    </plurals>
+</resources>
