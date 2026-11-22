@@ -1,0 +1,11 @@
+# Readable stack traces in logcat.
+-keepattributes SourceFile,LineNumberTable
+
+# Default ViewModelProvider factories create the theme, font, emoji and
+# navbar AndroidViewModels reflectively through (Application) constructors.
+-keepclassmembers class * extends androidx.lifecycle.AndroidViewModel {
+    <init>(android.app.Application);
+}
+-keepclassmembers class * extends androidx.lifecycle.ViewModel {
+    <init>();
+}
